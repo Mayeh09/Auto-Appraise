@@ -1,0 +1,91 @@
+local player = game.Players.LocalPlayer
+local autoappraise = true
+
+-- Define the filter settings
+local filterData = {
+    Weight = 0,        -- Set to 0 to ignore weight filtering; adjust this value to filter by weight
+    Sparkling = false,  -- Set to true to include only sparkling tools; set to false to ignore sparkling
+    Shiny = false,      -- Set to true to include only shiny tools; set to false to ignore shiny
+    Mutation = ""       -- Set to the desired mutation (example: "Mythic") to filter by mutation; leave as "" to ignore mutation
+}
+
+-- Function to get the equipped tool
+local function getEquippedTool()
+    for _, v in pairs(player.Character:GetChildren()) do
+        if v:IsA("Tool") and v:FindFirstChild("link") then
+            return v
+        end
+    end
+    return nil
+end
+
+-- Event handler to equip the tool when added to the backpack
+player.Backpack.ChildAdded:Connect(function(instance)
+    if instance:IsA("Tool") and not instance:FindFirstChild("link") then
+        repeat task.wait() until instance:FindFirstChild("link")
+        player.PlayerGui.hud.safezone.backpack.events.equip:FireServer(instance)
+    end
+end)
+
+-- Function to apply filters to the tool's stats
+local function applyFilter(statFolder)
+    -- Check for Weight filter
+    if filterData.Weight > 0 and (statFolder.Weight.Value < filterData.Weight or statFolder.Weight.Value == 0) then
+        return false
+    end
+
+    -- Check for Sparkling filter
+    if filterData.Sparkling and not statFolder:FindFirstChild("Sparkling") then
+        return false
+    end
+
+    -- Check for Shiny filter
+    if filterData.Shiny and not statFolder:FindFirstChild("Shiny") then
+        return false
+    end
+
+    -- Check for Mutation filter
+    local mutation = statFolder:FindFirstChild("Mutation")
+    if mutation and mutation.Value ~= filterData.Mutation then
+        return false
+    end
+
+    return true -- All filters passed
+end
+
+-- Main function for automatic appraisal
+local function AutoAppraise()
+    print("Starting auto appraisal...") -- Debug output
+    while autoappraise do
+        task.wait(0.5) -- Shortened wait time for faster appraisal
+        
+        local tool = getEquippedTool() -- Get the equipped tool
+        if tool then
+            local statFolder = tool.link.Value -- Get the stats folder linked to the tool
+            print("Appraising:", tool.Name) -- Debug output
+
+            -- Check if the tool meets all desired conditions
+            if applyFilter(statFolder) then
+                print("Tool meets filter conditions. Continuing appraisal...")
+                
+                -- Attempt to appraise the tool
+                local success, err = pcall(function()
+                    workspace.world.npcs.Appraiser.appraiser.appraise:InvokeServer()
+                end)
+
+                if success then
+                    print("Appraise invoked successfully.")
+                else
+                    warn("Appraise invocation failed:", err)
+                end
+            else
+                print("Tool does not meet filter conditions. Continuing appraisal...")
+            end
+        else
+            print("No valid tool found to appraise. Ensure you have a tool equipped.")
+            task.wait(1) -- Wait before re-checking
+        end
+    end
+end
+
+AutoAppraise()
